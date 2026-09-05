@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 rednakta
 """미니맵 영역 지정 안내용 도식 이미지를 생성한다.
 
 실제 게임 화면 캡처 대신 사용하는 자체 제작 도식이며, 결과물은

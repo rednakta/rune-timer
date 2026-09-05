@@ -17,6 +17,7 @@
 창모드/전체화면 변경 시 미니맵 위치가 달라질 수 있으니, 룬 영역을 다시 지정해 주세요.
 
 라이선스 안내:
+Copyright (C) 2026 rednakta
 이 앱은 GPL-3.0-or-later로 배포되며 무보증입니다. 라이선스 전문은 LICENSE,
 포함된 외부 라이브러리와 폰트의 라이선스 전문은 THIRD_PARTY_LICENSES.txt를
 확인해 주세요.

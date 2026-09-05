@@ -122,7 +122,12 @@ powershell -ExecutionPolicy Bypass -File .\build_rune_timer.ps1
 
 ## 라이선스
 
-소스코드는 GPL-3.0-or-later로 공개합니다.
+Copyright (C) 2026 rednakta
+
+소스코드는 GPL-3.0-or-later로 공개합니다. 이 프로그램은 자유 소프트웨어이며,
+GNU General Public License 제3판 또는 그 이후 버전의 조건에 따라 재배포하거나
+수정할 수 있습니다. 유용하게 쓰이기를 바라며 배포되지만 어떠한 보증도 제공하지
+않습니다. 자세한 내용은 `LICENSE` 파일을 확인해 주세요.
 
 폰트와 외부 라이브러리는 각 프로젝트의 라이선스를 따르며, GPL이 적용되지 않습니다. 요약은 `THIRD_PARTY_NOTICES.md`, 라이선스 전문은 `THIRD_PARTY_LICENSES.txt`를 확인해 주세요.
 

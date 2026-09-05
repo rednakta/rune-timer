@@ -1,4 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+#
+# 룬 타이머 - Windows용 로컬 PiP 룬 알림 및 커스텀 타이머 도구
+# Copyright (C) 2026 rednakta
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
 import math
@@ -99,6 +115,23 @@ RESTORE_BLUR_FADE_STEP_ALPHA = 0.20
 OFFLINE_RUNE_ALERT_LIMIT = 3
 OFFLINE_RUNE_ALERT_INTERVAL_SECONDS = 3.0
 RUNE_WINDOW_SYNC_INTERVAL_SECONDS = 6.0
+COPYRIGHT_HOLDER = "rednakta"
+COPYRIGHT_YEAR = "2026"
+LICENSE_NOTICE_TITLE = "라이선스 정보"
+LICENSE_NOTICE_TEXT = (
+    f"룬 타이머\n"
+    f"Copyright (C) {COPYRIGHT_YEAR} {COPYRIGHT_HOLDER}\n\n"
+    "이 프로그램은 자유 소프트웨어입니다.\n"
+    "GNU General Public License version 3 또는 그 이후 버전의 조건에 따라\n"
+    "재배포하거나 수정할 수 있습니다.\n\n"
+    "이 프로그램은 유용하게 쓰이기를 바라며 배포되지만,\n"
+    "어떠한 형태의 보증도 제공하지 않습니다.\n"
+    "상품성이나 특정 목적 적합성에 대한 묵시적 보증도 포함되지 않습니다.\n\n"
+    "라이선스 전문: 설치 폴더의 LICENSE 파일\n"
+    "https://www.gnu.org/licenses/gpl-3.0.html\n\n"
+    "포함된 외부 라이브러리와 폰트, 알림 음원의 라이선스는\n"
+    "THIRD_PARTY_LICENSES.txt를 확인해 주세요."
+)
 DISCLAIMER_VERSION = 1
 DISCLAIMER_TITLE = "이용약관"
 DISCLAIMER_TERMS_PARAGRAPHS = (
@@ -2373,11 +2406,29 @@ class MapleTimerApp:
         )
         notice_button.pack(anchor="center", pady=(2, 0))
         notice_button.bind("<Button-1>", lambda _event: self._show_disclaimer_dialog(readonly=True))
+        license_button = tk.Label(
+            panel,
+            text=f"GPL-3.0-or-later · (C) {COPYRIGHT_YEAR} {COPYRIGHT_HOLDER} · 무보증",
+            bg=c["panel"],
+            fg=c["muted"],
+            activeforeground=c["blue"],
+            font=self._settings_font(8),
+            cursor="hand2",
+        )
+        license_button.pack(anchor="center", pady=(6, 0))
+        license_button.bind("<Button-1>", lambda _event: self._show_license_notice())
         self.settings_back_button = BackIconButton(page, lambda: self._switch_page_with_blur("monitor"), width=76, height=76, bg="#181a1b", hover="#222526", outline="#2b3031")
         self.settings_back_button.place(x=22, y=22, anchor="nw")
         self._raise_widget(self.settings_back_button)
         page.bind("<Configure>", self._layout_settings_page)
         return page
+
+    def _show_license_notice(self):
+        """GPLv3 5(d)에 따른 저작권/무보증/라이선스 고지."""
+        try:
+            messagebox.showinfo(LICENSE_NOTICE_TITLE, LICENSE_NOTICE_TEXT, parent=self.root)
+        except Exception as exc:
+            log_error("license_notice", exc)
 
     def _raise_widget(self, widget):
         try:

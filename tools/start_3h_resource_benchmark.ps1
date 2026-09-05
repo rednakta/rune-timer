@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 rednakta
 param(
     [int]$DurationSeconds = 10800,
     [int]$IntervalSeconds = 10
