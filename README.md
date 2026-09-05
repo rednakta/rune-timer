@@ -93,7 +93,7 @@ python .\pip_timer_auto_detect_app.pyw
 powershell -ExecutionPolicy Bypass -File .\build_rune_timer.ps1
 ```
 
-빌드 결과물은 `dist\룬 타이머.exe`에 생성됩니다. 공개 배포 시에는 소스코드는 GitHub 저장소에 올리고, 실행 파일은 GitHub Releases에 zip으로 첨부하는 방식을 권장합니다.
+빌드 결과물은 `dist\RuneTimer.exe`에 생성됩니다. 공개 배포 시에는 소스코드는 GitHub 저장소에 올리고, 실행 파일은 GitHub Releases에 zip으로 첨부하는 방식을 권장합니다.
 
 ## 프로젝트 구조
 

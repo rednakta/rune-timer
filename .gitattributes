@@ -14,3 +14,6 @@
 *.ttf binary
 *.mp3 binary
 *.wav binary
+
+# 배포용 안내문은 Windows 메모장 호환을 위해 CRLF 유지
+읽어주세요.txt text eol=crlf
