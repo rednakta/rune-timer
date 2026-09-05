@@ -49,3 +49,6 @@ Thumbs.db
 .coverage.*
 htmlcov/
 *.egg-info/
+
+# 릴리스마다 새로 쓰는 임시 릴리스 본문
+release_body.md
