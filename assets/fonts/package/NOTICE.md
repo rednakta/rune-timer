@@ -5,7 +5,8 @@
 - 서체명: 넥슨Lv2고딕 (NEXON Lv2 Gothic)
 - 저작권자: NEXON Korea Corporation
 - 공식 배포처: [NEXON LEVEL UP](https://levelup.nexon.com/index.html)
-- 사용정책: [넥슨 폰트 사용정책](https://levelup.nexon.com/index.html#policy)
+- 사용정책: [넥슨 브랜드 가이드 - 서체](https://brand.nexon.com/ko/ci-brand-guidelines/typeface#section-lv2-gothic)
+  (패키지 메타데이터에 적힌 https://levelup.nexon.com/index.html#policy 는 현재 접속되지 않음)
 - 이 저장소에 넣은 경로: npm 패키지 [`@kfonts/nexon-lv2-gothic`](https://www.npmjs.com/package/@kfonts/nexon-lv2-gothic) v0.2.0
   (패키지의 원본 `README.md`와 `metadata.json`을 이 디렉터리에 함께 보존)
 
@@ -37,13 +38,42 @@
 
 정책 내용은 변경될 수 있으므로, 배포 시점마다 아래 표를 갱신하세요.
 
-| 확인일 | 확인자 | 확인한 정책 URL | 결과 |
+| 확인일 | 확인자 | 확인한 URL | 결과 |
 |---|---|---|---|
-| (미확인) | | https://levelup.nexon.com/index.html#policy | 배포 전 확인 필요 |
+| 2026-09-05 | 2차 출처 조사 | noonnu.cc/font_page/435, fonts.taedonn.com | 아래 내용 확인. 공식 페이지는 접속 불가로 미확인 |
+| (미확인) | | brand.nexon.com/ko/ci-brand-guidelines/typeface | 공식 원문 확인 필요 |
 
-확인해야 할 항목:
+## 확인된 조건 (2026-09-05, 2차 출처 기준)
 
-- 폰트 파일을 애플리케이션에 번들해 재배포하는 것이 허용되는지
-- 생성 문서(PDF)에 서브셋 임베드하는 것이 허용되는지
-- 요구되는 저작권 표시 문구와 표기 위치
-- 상업적 이용 및 유료 배포 시 추가 조건
+공식 페이지(levelup.nexon.com, brand.nexon.com) 접속이 되지 않아 폰트 정보
+사이트를 통해 확인한 내용이다. **공식 원문 확인으로 대체되어야 한다.**
+
+| 항목 | 조건 |
+|---|---|
+| 상업적 이용 | 가능. 개인·기업 모두 무료 |
+| 인쇄물, 웹, 영상, 포장지, BI/CI | 사용 가능 |
+| 임베딩 | 가능. 프로그램 내 폰트 탑재, E-book 제작 포함 |
+| 소프트웨어 번들 | 서체의 저작권 안내를 포함하면 가능 |
+| 수정·편집 | **금지.** 배포되는 형태 그대로 사용해야 함 |
+| 유료 판매 | **금지.** 폰트 파일 자체를 판매할 수 없음 |
+| 출처 표기 | 권장 |
+
+### 이 프로젝트에 대한 판단
+
+1. **exe 번들 (사용 형태 2) — 허용 범위로 판단.** "저작권 안내를 포함한
+   소프트웨어 번들·임베디드 사용 가능" 조건에 해당하며, 파일을 수정하지
+   않고 원본 그대로 포함한다. 저작권 안내는 THIRD_PARTY_LICENSES.txt와
+   이 파일이 담당한다.
+2. **PDF 서브셋 임베드 (사용 형태 3) — 허용 범위로 판단.** 임베딩 항목에
+   해당한다.
+3. **저장소에 TTF 원본을 그대로 두는 것 (사용 형태 1의 전제) — 회색지대.**
+   정책 본문은 "자유롭게 사용 및 배포"라고 하지만, 폰트 정보 사이트의
+   요약표는 "폰트 파일의 수정·복제·배포" 금지로 표기한다. 두 서술이
+   상충하므로 공식 원문 확인이 필요하다. 공개 저장소에 폰트 파일을 그대로
+   올려두는 것이 문제가 된다면, 저장소에서 TTF를 빼고 빌드 시 공식
+   배포처에서 내려받도록 바꾸는 선택지가 있다.
+
+### 출처
+
+- https://noonnu.cc/font_page/435
+- https://fonts.taedonn.com/post/NEXON+Lv2+Gothic
