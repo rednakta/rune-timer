@@ -1,5 +1,20 @@
 # Release Notes
 
+## v1.1.2
+
+기준일: 2026-09-07
+
+### Fixed
+
+- 스플래시 이미지와 동일한 가상 화면 기준으로 앱을 화면 중앙에 표시
+- 해상도·DPI 변경으로 창이 화면 밖에 남거나 작업표시줄에만 보이는 경우 중앙으로 복구
+- 위젯 모드에서 일반 창으로 복귀할 때도 중앙 배치
+
+### Distribution
+
+- Windows 10/11용 단일 실행 파일로 빌드
+- 실행 파일은 저장소가 아닌 GitHub Releases에 첨부
+- `RuneTimer.exe` SHA-256: `14657ED0DD04B2BA9A032B2BB5A8C00CD25F51E1A31754920861162B8AE1D6EE`
 ## v1.1.1-first-run-notice
 
 기준일: 2026-09-05

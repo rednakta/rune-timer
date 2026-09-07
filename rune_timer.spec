@@ -8,6 +8,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
+        ('.\\assets\\ui', 'assets\\ui'),
         ('.\\maple_timer_custom_icon.ico', '.'),
         ('.\\THIRD_PARTY_LICENSES.txt', '.'),
         ('.\\LICENSE', '.'),

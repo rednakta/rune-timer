@@ -50,13 +50,28 @@ except Exception:
     dxcam = None
 
 
-APP_NAME = "룬 타이머"
+APP_DIR = Path.home() / "AppData" / "Roaming" / "MapleTimerAutoDetect"
+
+def _load_ui_profile():
+    try:
+        value = json.loads((APP_DIR / "ui-profile.json").read_text(encoding="utf-8"))
+        return value if value in ("low", "high") else "low"
+    except (OSError, ValueError, TypeError):
+        return "low"
+
+UI_PROFILE = next((arg.split("=", 1)[1] for arg in sys.argv if arg in ("--ui=low", "--ui=high")), _load_ui_profile())
+LOW_RES = UI_PROFILE == "low"
+UI_FACTOR = 0.65 if LOW_RES else 1.0
+
+def ui_px(value):
+    return max(1, round(value * UI_FACTOR))
+
+APP_NAME = "룬 타이머" + (" · 저해상도" if LOW_RES else " · 고해상도")
 APP_USER_MODEL_ID = "Nilbox.RuneTimer"
 DEFAULT_SESSION_SECONDS = 5 * 60 * 60
 MIN_INTERVAL = 5
 MAX_INTERVAL = 24 * 60 * 60
 TRANSPARENT = "#ff00ff"
-APP_DIR = Path.home() / "AppData" / "Roaming" / "MapleTimerAutoDetect"
 SETTINGS_PATH = APP_DIR / "settings.json"
 RUNTIME_LOG_PATH = APP_DIR / "runtime_log.txt"
 
@@ -89,8 +104,8 @@ MAPLE_PROCESS_NAMES = {"maplestory.exe"}
 DEFAULT_RUNE_COOLDOWN_MINUTES = 15
 RUNE_COOLDOWN_CHOICES = (10, 15)
 RUNE_COOLDOWN_SECONDS = DEFAULT_RUNE_COOLDOWN_MINUTES * 60
-WIDGET_WIDTH = 384
-WIDGET_HEIGHT = 138
+WIDGET_WIDTH = 250 if LOW_RES else 384
+WIDGET_HEIGHT = 90 if LOW_RES else 138
 APP_WIDTH = 805
 APP_HEIGHT = 1064
 APP_SIZE_PRESETS = (
@@ -104,6 +119,9 @@ APP_SIZE_PRESETS = (
     (1006, 1330),
 )
 DEFAULT_APP_SIZE = (704, 931)
+if LOW_RES:
+    APP_SIZE_PRESETS = ((242, 320), (282, 373), (322, 426), (362, 479), (403, 532), (443, 586))
+    DEFAULT_APP_SIZE = (322, 426)
 APP_MIN_WIDTH, APP_MIN_HEIGHT = APP_SIZE_PRESETS[0]
 APP_MAX_WIDTH, APP_MAX_HEIGHT = APP_SIZE_PRESETS[-1]
 SPLASH_WIDTH = 400
@@ -189,6 +207,10 @@ DISCLAIMER_CONFIRM_TEXT = "위 내용을 확인했으며,\n사용에 따른 책�
 
 def resource_path(*parts):
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    if len(parts) == 1 and Path(parts[0]).suffix.lower() in (".png", ".ico"):
+        variant = base / "assets" / "ui" / UI_PROFILE / parts[0]
+        if variant.exists():
+            return variant
     return base.joinpath(*parts)
 
 
@@ -1042,7 +1064,10 @@ class MapleTimerApp:
             self.last_rune_cleared_at = time.monotonic()
             self.last_rune_cleared_wall = time.time()
         width, height = self.app_size
-        self.app_position = self._top_left_app_position(width, height)
+        # The splash is centered using the virtual desktop bounds. Start the
+        # main window from that same center so every monitor layout, taskbar
+        # position, and resolution follows one coordinate system.
+        self.app_position = self._center_app_position(width, height)
         self.root.geometry(f"{width}x{height}+{self.app_position[0]}+{self.app_position[1]}")
         self.monitor_enabled = True
         self._build_ui()
@@ -1152,9 +1177,12 @@ class MapleTimerApp:
         left, top, right, bottom = self._virtual_screen_bounds()
         screen_w = max(1, right - left)
         screen_h = max(1, bottom - top)
+        # A stale position can point to a monitor that no longer exists (or
+        # to a previous DPI/layout). Use the splash-aligned center as the
+        # recovery position instead of the old bottom-left default.
         fallback = (
-            left + 24,
-            bottom - height - 24,
+            left + int((screen_w - width) / 2),
+            top + int((screen_h - height) / 2),
         )
         if not position or len(position) != 2:
             return self._clamp_app_position(fallback, width, height, margin=24)
@@ -1193,7 +1221,9 @@ class MapleTimerApp:
         return (int(x), int(y))
 
     def _top_left_app_position(self, width=None, height=None, margin=24):
-        return self._bottom_left_app_position(width, height, margin)
+        # Kept as a compatibility alias for older call sites. The app should
+        # start/restore in the same center used by the splash screen.
+        return self._center_app_position(width, height, margin)
 
     def _bottom_left_app_position(self, width=None, height=None, margin=24):
         width = max(1, int(width or self.app_size[0] or APP_WIDTH))
@@ -1506,7 +1536,10 @@ class MapleTimerApp:
             getattr(self, "app_size", DEFAULT_APP_SIZE)[1],
         )
         self.app_size = (width, height)
-        self.app_position = self._top_left_app_position(width, height)
+        # The splash is centered using the virtual desktop bounds. Start the
+        # main window from that same center so every monitor layout, taskbar
+        # position, and resolution follows one coordinate system.
+        self.app_position = self._center_app_position(width, height)
         x, y = self.app_position
         try:
             self.root.attributes("-alpha", 1.0)
@@ -2262,15 +2295,15 @@ class MapleTimerApp:
         self.card_window = self.backdrop.create_window(12, 12, anchor="nw", window=self.card)
         self.surface_widgets.append(self.card)
 
-        titlebar = tk.Frame(self.card, bg=c["surface_alt"], padx=26, pady=0, height=76)
+        titlebar = tk.Frame(self.card, bg=c["surface_alt"], padx=ui_px(26), pady=0, height=ui_px(76))
         titlebar.pack(fill="x")
         titlebar.pack_propagate(False)
         self._bind_drag(titlebar)
         self.surface_widgets.append(titlebar)
         dots = tk.Frame(titlebar, bg=c["surface_alt"])
-        dots.pack(side="left", pady=(26,0), anchor="n")
-        self._dot(dots, c["red"], self._quit_app).pack(side="left", padx=(0,13))
-        self._dot(dots, c["yellow"], self._minimize).pack(side="left", padx=(0,13))
+        dots.pack(side="left", pady=(ui_px(26),0), anchor="n")
+        self._dot(dots, c["red"], self._quit_app).pack(side="left", padx=(0,ui_px(13)))
+        self._dot(dots, c["yellow"], self._minimize).pack(side="left", padx=(0,ui_px(13)))
         self._dot(dots, c["green"], self._reset_app_size).pack(side="left")
 
         self.body = tk.Frame(self.card, bg=c["surface"])
@@ -2377,10 +2410,24 @@ class MapleTimerApp:
     def _build_settings_page(self):
         c = self.colors
         page = tk.Frame(self.page_shell, bg=c["surface"])
-        stack = tk.Frame(page, bg=c["surface"])
-        stack.pack(anchor="center", expand=True)
-        panel = tk.Frame(stack, bg=c["panel"], padx=20, pady=18, highlightthickness=1, highlightbackground=c["line"])
+        viewport = tk.Canvas(page, bg=c["surface"], highlightthickness=0, bd=0)
+        viewport.pack(fill="both", expand=True, padx=4, pady=(58 if LOW_RES else 96, 8))
+        stack = tk.Frame(viewport, bg=c["surface"])
+        stack_item = viewport.create_window(0, 0, anchor="n", window=stack)
+        self.settings_viewport = viewport
+        self.settings_stack = stack
+        self.settings_stack_item = stack_item
+        stack.bind("<Configure>", self._center_settings_content)
+        viewport.bind("<Configure>", self._center_settings_content)
+        panel = tk.Frame(stack, bg=c["panel"], padx=8 if LOW_RES else 20, pady=12 if LOW_RES else 18, highlightthickness=1, highlightbackground=c["line"])
         panel.pack(anchor="center")
+        tk.Label(panel, text="화면 크기", bg=c["panel"], fg=c["text"], font=self._settings_font(10, "bold")).pack(anchor="w")
+        profile_row = tk.Frame(panel, bg=c["panel"])
+        profile_row.pack(fill="x", pady=(6, 4))
+        for profile, label in (("low", "저해상도"), ("high", "고해상도")):
+            RoundedButton(profile_row, label, lambda value=profile: self._set_ui_profile(value), width=80, height=30, radius=10, bg=c["panel_3"], fg=c["text"], hover=c["panel_2"], font=self._settings_font(9)).pack(side="left", padx=(0, 4))
+        self.ui_profile_status = tk.StringVar(value="현재: " + ("저해상도" if LOW_RES else "고해상도"))
+        tk.Label(panel, textvariable=self.ui_profile_status, bg=c["panel"], fg=c["muted"], font=self._settings_font(8), wraplength=170 if LOW_RES else 350).pack(anchor="w", pady=(0, 12))
         row = tk.Frame(panel, bg=c["panel"])
         row.pack(anchor="center", pady=(0, 12))
         self._entry_block(row, "", self.stall_var, "초").pack(side="left")
@@ -2417,11 +2464,49 @@ class MapleTimerApp:
         )
         license_button.pack(anchor="center", pady=(6, 0))
         license_button.bind("<Button-1>", lambda _event: self._show_license_notice())
-        self.settings_back_button = BackIconButton(page, lambda: self._switch_page_with_blur("monitor"), width=76, height=76, bg="#181a1b", hover="#222526", outline="#2b3031")
+        self.settings_back_button = BackIconButton(page, lambda: self._switch_page_with_blur("monitor"), width=40 if LOW_RES else 76, height=40 if LOW_RES else 76, bg="#181a1b", hover="#222526", outline="#2b3031")
         self.settings_back_button.place(x=22, y=22, anchor="nw")
         self._raise_widget(self.settings_back_button)
         page.bind("<Configure>", self._layout_settings_page)
+        wheel_tag = f"SettingsWheel{str(page)}"
+        page.bind_class(wheel_tag, "<MouseWheel>", self._scroll_settings)
+        def bind_wheel(widget):
+            widget.bindtags((wheel_tag,) + widget.bindtags())
+            for child in widget.winfo_children():
+                bind_wheel(child)
+        bind_wheel(page)
         return page
+
+    def _center_settings_content(self, _event=None):
+        viewport = self.settings_viewport
+        width = max(1, viewport.winfo_width())
+        height = max(1, viewport.winfo_height())
+        content_height = self.settings_stack.winfo_reqheight()
+        top = max(0, (height - content_height) / 2)
+        viewport.coords(self.settings_stack_item, width / 2, top)
+        viewport.configure(scrollregion=(0, 0, width, max(height, top + content_height)))
+        if content_height <= height:
+            viewport.yview_moveto(0)
+
+    def _scroll_settings(self, event):
+        viewport = self.settings_viewport
+        if self.settings_stack.winfo_reqheight() <= viewport.winfo_height():
+            return "break"
+        delta = getattr(event, "delta", 0)
+        units = (-1 if delta > 0 else 1) * max(1, round(abs(delta) / 120)) * 3
+        viewport.yview_scroll(units, "units")
+        return "break"
+
+    def _set_ui_profile(self, profile):
+        if profile not in ("low", "high"):
+            return
+        try:
+            APP_DIR.mkdir(parents=True, exist_ok=True)
+            (APP_DIR / "ui-profile.json").write_text(json.dumps(profile), encoding="utf-8")
+            self.ui_profile_status.set("다음 실행: " + ("저해상도" if profile == "low" else "고해상도"))
+        except OSError as exc:
+            log_error("save_ui_profile", exc)
+            self.ui_profile_status.set("저장 실패")
 
     def _show_license_notice(self):
         """GPLv3 5(d)에 따른 저작권/무보증/라이선스 고지."""
@@ -2442,8 +2527,8 @@ class MapleTimerApp:
             return
         try:
             width = max(1, int(self.root.winfo_width()))
-            x = 16 if width <= 520 else 22
-            y = 16 if width <= 520 else 22
+            x = 8 if LOW_RES else (16 if width <= 520 else 22)
+            y = 8 if LOW_RES else (16 if width <= 520 else 22)
             button.place_configure(x=x, y=y)
             self._raise_widget(button)
         except tk.TclError:
@@ -2455,14 +2540,16 @@ class MapleTimerApp:
             height = max(APP_MIN_HEIGHT, int(self.root.winfo_height()))
         except tk.TclError:
             width, height = self.app_size or DEFAULT_APP_SIZE
+        if LOW_RES:
+            return max(0.24, min(1.0, min(width / APP_WIDTH, (height - ui_px(76) - 24) / (APP_HEIGHT - 100))))
         return max(0.55, min(1.28, min(width / APP_WIDTH, height / APP_HEIGHT)))
 
     def _layout_monitor_page(self, _event=None):
         if not hasattr(self, "bottom_dock"):
             return
         scale = self._monitor_scale()
-        dock_width = max(340, int(620 * scale))
-        dock_height = max(88, int(160 * scale))
+        dock_width = max(140 if LOW_RES else 340, int(620 * scale))
+        dock_height = max(44 if LOW_RES else 88, int(160 * scale))
         try:
             page_height = max(1, self.monitor_page.winfo_height())
         except tk.TclError:
@@ -2487,17 +2574,17 @@ class MapleTimerApp:
             canvas_width = max(canvas.winfo_reqwidth(), APP_WIDTH - 26)
         scale = self._monitor_scale()
         card_y = int(124 * scale)
-        card_size = max(275, int(500 * scale))
+        card_size = max(125 if LOW_RES else 275, int(500 * scale))
         card_x = (canvas_width - card_size) / 2
         self.countdown_card_metrics = (card_x, card_y, card_size)
-        self.countdown_panel_photo = self._make_countdown_panel_image(card_size, card_size, max(52, int(88 * scale)))
+        self.countdown_panel_photo = self._make_countdown_panel_image(card_size, card_size, max(22 if LOW_RES else 52, int(88 * scale)))
         canvas.create_image(card_x, card_y, image=self.countdown_panel_photo, anchor="nw", tags=("countdown", "countdown_card"))
         number_fill = c["muted"] if getattr(self, "warning_timer_paused", False) else c["text"]
-        self.countdown_number_item = canvas.create_text(card_x + card_size / 2, card_y + card_size * 0.48, text=str(display_seconds), fill=number_fill, font=self._timer_number_font(max(46, int(82 * scale))), anchor="center", tags=("countdown", "countdown_card"))
-        progress_width = card_size - max(64, int(118 * scale))
-        progress_height = max(9, int(16 * scale))
+        self.countdown_number_item = canvas.create_text(card_x + card_size / 2, card_y + card_size * 0.48, text=str(display_seconds), fill=number_fill, font=self._timer_number_font(max(22 if LOW_RES else 46, int(82 * scale))), anchor="center", tags=("countdown", "countdown_card"))
+        progress_width = card_size - max(30 if LOW_RES else 64, int(118 * scale))
+        progress_height = max(4 if LOW_RES else 9, int(16 * scale))
         progress_x = card_x + (card_size - progress_width) / 2
-        progress_y = card_y + card_size - max(48, int(66 * scale))
+        progress_y = card_y + card_size - max(18 if LOW_RES else 48, int(66 * scale))
         self.countdown_progress_photo = self._make_countdown_progress_image(progress_width, progress_height, progress)
         self.countdown_progress_item = canvas.create_image(progress_x, progress_y, image=self.countdown_progress_photo, anchor="nw", tags=("countdown", "countdown_card"))
         self.last_countdown_progress_update_at = time.monotonic()
@@ -2767,7 +2854,7 @@ class MapleTimerApp:
         card_x, card_y, card_size = getattr(self, "countdown_card_metrics", ((APP_WIDTH - 26 - 500) / 2, 124, 500))
         scale = self._monitor_scale()
         bar_width = card_size
-        bar_height = max(9, int(17 * scale))
+        bar_height = max(4 if LOW_RES else 9, int(17 * scale))
         bar_x = card_x
         bar_y = card_y + card_size + int(32 * scale)
         active = getattr(self, "rune_active_visual", False)
@@ -2775,8 +2862,8 @@ class MapleTimerApp:
         canvas.create_image(bar_x, bar_y, image=self.rune_status_bar_photo, anchor="nw", tags="rune_status")
 
     def _draw_scan_icon(self, canvas, cx, cy, color):
-        size = 18
-        arm = 10
+        size = 9 if LOW_RES else 18
+        arm = 5 if LOW_RES else 10
         opts = {"fill": color, "width": 3, "capstyle": tk.ROUND}
         for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
             x = cx + sx * size
@@ -2785,7 +2872,7 @@ class MapleTimerApp:
             canvas.create_line(x, y, x, y - sy * arm, **opts)
 
     def _draw_gear_icon(self, canvas, cx, cy, color):
-        icon = self._make_tinted_settings_icon(42, color)
+        icon = self._make_tinted_settings_icon(22 if LOW_RES else 42, color)
         if icon is not None:
             self.bottom_settings_icon_photo = icon
             canvas.create_image(cx, cy, image=self.bottom_settings_icon_photo)
@@ -2901,7 +2988,7 @@ class MapleTimerApp:
         dock_x1, dock_y1, dock_x2, dock_y2 = 0, 4, width, height - 4
         self._canvas_rounded_rect(canvas, dock_x1 + 2, dock_y1 + 2, dock_x2 - 2, dock_y2 - 2, max(34, int(48 * scale)), fill=(c["panel"]), outline=c["line"], width=2)
 
-        button_size = max(58, int(106 * scale))
+        button_size = max(30 if LOW_RES else 58, int(106 * scale))
         button_y = height / 2
         centers = {
             "scan": (width * 0.22, button_y),
@@ -2924,7 +3011,7 @@ class MapleTimerApp:
 
         self._draw_scan_icon(canvas, *centers["scan"], "#f4f6f7")
         rune_cx, rune_cy = centers["rune"]
-        rune_size = max(10, int(18 * scale))
+        rune_size = max(5 if LOW_RES else 10, int(18 * scale))
         if getattr(self, "rune_active_visual", False):
             blink_on = getattr(self, "rune_blink_on", True)
             canvas.create_polygon(
@@ -3422,7 +3509,10 @@ class MapleTimerApp:
             getattr(self, "app_size", DEFAULT_APP_SIZE)[1],
         )
         self.app_size = (width, height)
-        self.app_position = self._top_left_app_position(width, height)
+        # The splash is centered using the virtual desktop bounds. Start the
+        # main window from that same center so every monitor layout, taskbar
+        # position, and resolution follows one coordinate system.
+        self.app_position = self._center_app_position(width, height)
         self.widget_mode_active = False
         self._hide_widget_window()
         self._force_main_window_visible(force_focus=True, attempts=0)
