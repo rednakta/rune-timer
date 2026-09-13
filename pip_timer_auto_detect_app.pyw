@@ -52,16 +52,20 @@ except Exception:
 
 APP_DIR = Path.home() / "AppData" / "Roaming" / "MapleTimerAutoDetect"
 
-def _load_ui_profile():
+def load_ui_profile():
     try:
-        value = json.loads((APP_DIR / "ui-profile.json").read_text(encoding="utf-8"))
-        return value if value in ("low", "high") else "low"
+        profile = json.loads((APP_DIR / "ui-profile.json").read_text(encoding="utf-8"))
+        if profile in ("low", "high"):
+            return profile
     except (OSError, ValueError, TypeError):
-        return "low"
+        pass
+    return "low"
 
-UI_PROFILE = next((arg.split("=", 1)[1] for arg in sys.argv if arg in ("--ui=low", "--ui=high")), _load_ui_profile())
+# One executable contains both asset sets; selection happens before Tk starts.
+UI_PROFILE = next((arg.split("=", 1)[1] for arg in sys.argv[1:] if arg in ("--ui=low", "--ui=high")), load_ui_profile())
 LOW_RES = UI_PROFILE == "low"
 UI_FACTOR = 0.65 if LOW_RES else 1.0
+MIN_UI_SCALE = 0.24 if LOW_RES else 0.55
 
 def ui_px(value):
     return max(1, round(value * UI_FACTOR))
@@ -72,7 +76,7 @@ DEFAULT_SESSION_SECONDS = 5 * 60 * 60
 MIN_INTERVAL = 5
 MAX_INTERVAL = 24 * 60 * 60
 TRANSPARENT = "#ff00ff"
-SETTINGS_PATH = APP_DIR / "settings.json"
+SETTINGS_PATH = APP_DIR / ("settings-low.json" if LOW_RES else "settings.json")
 RUNTIME_LOG_PATH = APP_DIR / "runtime_log.txt"
 
 
@@ -118,14 +122,13 @@ APP_SIZE_PRESETS = (
     (906, 1198),
     (1006, 1330),
 )
-DEFAULT_APP_SIZE = (704, 931)
 if LOW_RES:
     APP_SIZE_PRESETS = ((242, 320), (282, 373), (322, 426), (362, 479), (403, 532), (443, 586))
-    DEFAULT_APP_SIZE = (322, 426)
+DEFAULT_APP_SIZE = (322, 426) if LOW_RES else (704, 931)
 APP_MIN_WIDTH, APP_MIN_HEIGHT = APP_SIZE_PRESETS[0]
 APP_MAX_WIDTH, APP_MAX_HEIGHT = APP_SIZE_PRESETS[-1]
-SPLASH_WIDTH = 400
-SPLASH_HEIGHT = 500
+SPLASH_WIDTH = ui_px(400)
+SPLASH_HEIGHT = ui_px(500)
 RESTORE_BLUR_CLEAR_TOP = 88
 RESTORE_BLUR_HOLD_MS = 300
 RESTORE_BLUR_FADE_STEP_MS = 50
@@ -893,6 +896,8 @@ class MapleTimerApp:
         self.sound_thread = threading.Thread(target=self._sound_loop, daemon=True)
         self.sound_thread.start()
         self.root = tk.Tk()
+        if LOW_RES:
+            self.root.tk.call("tk", "scaling", 1.0)
         self.root.title(APP_NAME)
         self.root.geometry(f"{DEFAULT_APP_SIZE[0]}x{DEFAULT_APP_SIZE[1]}+80+80")
         self.root.minsize(APP_MIN_WIDTH, APP_MIN_HEIGHT)
@@ -1625,9 +1630,9 @@ class MapleTimerApp:
         canvas.pack(fill="both", expand=True)
         self.splash_logo_image = ImageTk.PhotoImage(self._make_splash_logo_frame(1.0))
         self.splash_logo_blur = ImageTk.PhotoImage(self._make_splash_logo_frame(1.0, blurred=True))
-        self.splash_image_item = canvas.create_image(width // 2, 172, image=self.splash_logo_image)
+        self.splash_image_item = canvas.create_image(width // 2, ui_px(172), image=self.splash_logo_image)
         self.splash_powered_image = ImageTk.PhotoImage(self._make_powered_by_image())
-        canvas.create_image(width // 2, 330, image=self.splash_powered_image)
+        canvas.create_image(width // 2, ui_px(330), image=self.splash_powered_image)
         self.splash_canvas = canvas
         self.root.after(2000, self._blur_startup_splash)
 
@@ -1703,7 +1708,7 @@ class MapleTimerApp:
                 grad_pixels[x, yy] = tuple(min(255, int(channel * shine)) for channel in color_rgb) + (255,)
         gradient.putalpha(mask)
         image.alpha_composite(gradient, (padding + powered_w + gap, 0))
-        output_size = (max(1, image.width // scale), max(1, image.height // scale))
+        output_size = (ui_px(image.width // scale), ui_px(image.height // scale))
         return image.resize(output_size, Image.Resampling.LANCZOS)
 
     def _gradient_color(self, start, end, t):
@@ -1727,8 +1732,8 @@ class MapleTimerApp:
         return points[-1]
 
     def _make_splash_logo_frame(self, progress, blurred=False):
-        size = 190
-        logo_size = 142
+        size = ui_px(190)
+        logo_size = ui_px(142)
         image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
 
         try:
@@ -1842,8 +1847,8 @@ class MapleTimerApp:
         screen_left, screen_top, screen_right, screen_bottom = self._virtual_screen_bounds()
         screen_w = max(1, screen_right - screen_left)
         screen_h = max(1, screen_bottom - screen_top)
-        width = max(780, min(1120, screen_w - 120))
-        height = max(780, min(1240, screen_h - 70))
+        width = min(720 if LOW_RES else 1120, max(480, screen_w - 40))
+        height = min(700 if LOW_RES else 1240, max(480, screen_h - 70))
         dialog = tk.Toplevel(self.root)
         self.disclaimer_dialog = dialog
         dialog.title(DISCLAIMER_TITLE)
@@ -2178,11 +2183,19 @@ class MapleTimerApp:
 
     def _load_settings(self):
         data = {}
-        if SETTINGS_PATH.exists():
+        source = SETTINGS_PATH
+        importing_legacy = LOW_RES and not source.exists()
+        if importing_legacy:
+            source = APP_DIR / "settings.json"
+        if source.exists():
             try:
-                data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+                data = json.loads(source.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 data = {}
+        if importing_legacy:
+            # Preserve existing feature preferences without importing a large window.
+            for key in ("app_size", "app_position", "widget_position"):
+                data.pop(key, None)
         self.session_seconds = clamp_int(data.get("session_seconds"), DEFAULT_SESSION_SECONDS, 60, MAX_INTERVAL)
         self.region = tuple(data["region"]) if isinstance(data.get("region"), list) and len(data["region"]) == 4 else None
         self.rune_region = tuple(data["rune_region"]) if isinstance(data.get("rune_region"), list) and len(data["rune_region"]) == 4 else None
@@ -2359,25 +2372,25 @@ class MapleTimerApp:
         row = tk.Frame(parent, bg=c["panel"])
         row.pack(fill="x", pady=(0, 8))
         tk.Label(row, text=label, bg=c["panel"], fg=c["muted"], font=self._settings_font(9)).pack(anchor="w")
-        VolumeSlider(row, value, command, width=292, height=34, start=c["blue"], end=c["cyan"]).pack(fill="x", pady=(0, 0))
+        VolumeSlider(row, value, command, width=170 if LOW_RES else 292, height=34, start=c["blue"], end=c["cyan"]).pack(fill="x", pady=(0, 0))
         return row
 
     def _settings_rune_cooldown_row(self, parent):
         c = self.colors
         row = tk.Frame(parent, bg=c["panel"])
         row.pack(fill="x", pady=(0, 10))
-        tk.Label(row, text="룬 게이지 기준", bg=c["panel"], fg=c["text"], font=self._settings_font(10, "bold")).pack(side="left")
+        tk.Label(row, text="룬 게이지 기준", bg=c["panel"], fg=c["text"], font=self._settings_font(10, "bold")).pack(side="top" if LOW_RES else "left")
         self.rune_cooldown_control = MinuteSegmentedControl(
             row,
             self.rune_cooldown_minutes,
             self._set_rune_cooldown_minutes,
-            width=200,
+            width=170 if LOW_RES else 200,
             height=36,
             active=c["blue"],
             bg=c["panel_3"],
             fg=c["text"],
         )
-        self.rune_cooldown_control.pack(side="right")
+        self.rune_cooldown_control.pack(side="bottom" if LOW_RES else "right", pady=(4, 0))
         return row
 
     def _build_timers_page(self):
@@ -2418,8 +2431,9 @@ class MapleTimerApp:
     def _build_settings_page(self):
         c = self.colors
         page = tk.Frame(self.page_shell, bg=c["surface"])
-        viewport = tk.Canvas(page, bg=c["surface"], highlightthickness=0, bd=0)
+        viewport = tk.Canvas(page, bg=c["surface"], highlightthickness=0)
         viewport.pack(fill="both", expand=True, padx=4, pady=(58 if LOW_RES else 96, 8))
+        viewport.configure(yscrollincrement=18)
         stack = tk.Frame(viewport, bg=c["surface"])
         stack_item = viewport.create_window(0, 0, anchor="n", window=stack)
         self.settings_viewport = viewport
@@ -2427,15 +2441,18 @@ class MapleTimerApp:
         self.settings_stack_item = stack_item
         stack.bind("<Configure>", self._center_settings_content)
         viewport.bind("<Configure>", self._center_settings_content)
-        panel = tk.Frame(stack, bg=c["panel"], padx=8 if LOW_RES else 20, pady=12 if LOW_RES else 18, highlightthickness=1, highlightbackground=c["line"])
+        panel = tk.Frame(stack, bg=c["panel"], padx=8 if LOW_RES else 10, pady=12 if LOW_RES else 18, highlightthickness=1, highlightbackground=c["line"])
         panel.pack(anchor="center")
         tk.Label(panel, text="화면 크기", bg=c["panel"], fg=c["text"], font=self._settings_font(10, "bold")).pack(anchor="w")
         profile_row = tk.Frame(panel, bg=c["panel"])
         profile_row.pack(fill="x", pady=(6, 4))
         for profile, label in (("low", "저해상도"), ("high", "고해상도")):
-            RoundedButton(profile_row, label, lambda value=profile: self._set_ui_profile(value), width=80, height=30, radius=10, bg=c["panel_3"], fg=c["text"], hover=c["panel_2"], font=self._settings_font(9)).pack(side="left", padx=(0, 4))
+            RoundedButton(profile_row, label, lambda value=profile: self._set_ui_profile(value),
+                          width=80, height=30, radius=10, bg=c["panel_3"], fg=c["text"],
+                          hover=c["panel_2"], font=self._settings_font(9)).pack(side="left", padx=(0, 4))
         self.ui_profile_status = tk.StringVar(value="현재: " + ("저해상도" if LOW_RES else "고해상도"))
-        tk.Label(panel, textvariable=self.ui_profile_status, bg=c["panel"], fg=c["muted"], font=self._settings_font(8), wraplength=170 if LOW_RES else 350).pack(anchor="w", pady=(0, 12))
+        tk.Label(panel, textvariable=self.ui_profile_status, bg=c["panel"], fg=c["muted"],
+                 font=self._settings_font(8), wraplength=170 if LOW_RES else 350).pack(anchor="w", pady=(0, 12))
         row = tk.Frame(panel, bg=c["panel"])
         row.pack(anchor="center", pady=(0, 12))
         self._entry_block(row, "", self.stall_var, "초").pack(side="left")
@@ -2464,6 +2481,7 @@ class MapleTimerApp:
         license_button = tk.Label(
             panel,
             text=f"GPL-3.0-or-later · (C) {COPYRIGHT_YEAR} {COPYRIGHT_HOLDER} · 무보증",
+            wraplength=170 if LOW_RES else 350,
             bg=c["panel"],
             fg=c["muted"],
             activeforeground=c["blue"],
@@ -2476,8 +2494,12 @@ class MapleTimerApp:
         self.settings_back_button.place(x=22, y=22, anchor="nw")
         self._raise_widget(self.settings_back_button)
         page.bind("<Configure>", self._layout_settings_page)
+        # A local bind tag routes wheels over labels, entries and canvas controls.
+        # No native scrollbar or reserved scrollbar gutter is drawn.
         wheel_tag = f"SettingsWheel{str(page)}"
         page.bind_class(wheel_tag, "<MouseWheel>", self._scroll_settings)
+        page.bind_class(wheel_tag, "<Button-4>", self._scroll_settings)
+        page.bind_class(wheel_tag, "<Button-5>", self._scroll_settings)
         def bind_wheel(widget):
             widget.bindtags((wheel_tag,) + widget.bindtags())
             for child in widget.winfo_children():
@@ -2487,21 +2509,32 @@ class MapleTimerApp:
 
     def _center_settings_content(self, _event=None):
         viewport = self.settings_viewport
+        stack = self.settings_stack
         width = max(1, viewport.winfo_width())
         height = max(1, viewport.winfo_height())
-        content_height = self.settings_stack.winfo_reqheight()
-        top = max(0, (height - content_height) / 2)
+        content_height = stack.winfo_reqheight()
+        page = viewport.master
+        # Center in the page when it fits; keep the first row reachable when tall.
+        top = max(0, (page.winfo_height() - content_height) / 2 - viewport.winfo_y())
         viewport.coords(self.settings_stack_item, width / 2, top)
         viewport.configure(scrollregion=(0, 0, width, max(height, top + content_height)))
-        if content_height <= height:
+        if top + content_height <= height:
             viewport.yview_moveto(0)
 
     def _scroll_settings(self, event):
+        if getattr(self, "current_page", None) != "settings":
+            return
         viewport = self.settings_viewport
         if self.settings_stack.winfo_reqheight() <= viewport.winfo_height():
             return "break"
+        number = getattr(event, "num", None)
         delta = getattr(event, "delta", 0)
-        units = (-1 if delta > 0 else 1) * max(1, round(abs(delta) / 120)) * 3
+        if number in (4, 5):
+            units = -3 if number == 4 else 3
+        elif delta:
+            units = (-1 if delta > 0 else 1) * max(1, round(abs(delta) / 120)) * 3
+        else:
+            return "break"
         viewport.yview_scroll(units, "units")
         return "break"
 
@@ -2510,11 +2543,15 @@ class MapleTimerApp:
             return
         try:
             APP_DIR.mkdir(parents=True, exist_ok=True)
-            (APP_DIR / "ui-profile.json").write_text(json.dumps(profile), encoding="utf-8")
-            self.ui_profile_status.set("다음 실행: " + ("저해상도" if profile == "low" else "고해상도"))
+            destination = APP_DIR / "ui-profile.json"
+            temporary = destination.with_suffix(".json.tmp")
+            temporary.write_text(json.dumps(profile), encoding="utf-8")
+            os.replace(temporary, destination)
+            label = "저해상도" if profile == "low" else "고해상도"
+            self.ui_profile_status.set(f"다음 실행: {label}")
         except OSError as exc:
             log_error("save_ui_profile", exc)
-            self.ui_profile_status.set("저장 실패")
+            self.ui_profile_status.set("저장 실패 · 다시 선택해주세요")
 
     def _show_license_notice(self):
         """GPLv3 5(d)에 따른 저작권/무보증/라이선스 고지."""
@@ -2549,7 +2586,7 @@ class MapleTimerApp:
         except tk.TclError:
             width, height = self.app_size or DEFAULT_APP_SIZE
         if LOW_RES:
-            return max(0.24, min(1.0, min(width / APP_WIDTH, (height - ui_px(76) - 24) / (APP_HEIGHT - 100))))
+            return max(MIN_UI_SCALE, min(width / APP_WIDTH, (height - ui_px(76) - 24) / (APP_HEIGHT - 100)))
         return max(0.55, min(1.28, min(width / APP_WIDTH, height / APP_HEIGHT)))
 
     def _layout_monitor_page(self, _event=None):
@@ -2557,7 +2594,7 @@ class MapleTimerApp:
             return
         scale = self._monitor_scale()
         dock_width = max(140 if LOW_RES else 340, int(620 * scale))
-        dock_height = max(44 if LOW_RES else 88, int(160 * scale))
+        dock_height = max(44, int(160 * scale))
         try:
             page_height = max(1, self.monitor_page.winfo_height())
         except tk.TclError:
@@ -2582,17 +2619,17 @@ class MapleTimerApp:
             canvas_width = max(canvas.winfo_reqwidth(), APP_WIDTH - 26)
         scale = self._monitor_scale()
         card_y = int(124 * scale)
-        card_size = max(125 if LOW_RES else 275, int(500 * scale))
+        card_size = max(125, int(500 * scale))
         card_x = (canvas_width - card_size) / 2
         self.countdown_card_metrics = (card_x, card_y, card_size)
-        self.countdown_panel_photo = self._make_countdown_panel_image(card_size, card_size, max(22 if LOW_RES else 52, int(88 * scale)))
+        self.countdown_panel_photo = self._make_countdown_panel_image(card_size, card_size, max(22, int(88 * scale)))
         canvas.create_image(card_x, card_y, image=self.countdown_panel_photo, anchor="nw", tags=("countdown", "countdown_card"))
         number_fill = c["muted"] if getattr(self, "warning_timer_paused", False) else c["text"]
-        self.countdown_number_item = canvas.create_text(card_x + card_size / 2, card_y + card_size * 0.48, text=str(display_seconds), fill=number_fill, font=self._timer_number_font(max(22 if LOW_RES else 46, int(82 * scale))), anchor="center", tags=("countdown", "countdown_card"))
-        progress_width = card_size - max(30 if LOW_RES else 64, int(118 * scale))
-        progress_height = max(4 if LOW_RES else 9, int(16 * scale))
+        self.countdown_number_item = canvas.create_text(card_x + card_size / 2, card_y + card_size * 0.48, text=str(display_seconds), fill=number_fill, font=self._timer_number_font(max(22, int(82 * scale))), anchor="center", tags=("countdown", "countdown_card"))
+        progress_width = card_size - max(30, int(118 * scale))
+        progress_height = max(4, int(16 * scale))
         progress_x = card_x + (card_size - progress_width) / 2
-        progress_y = card_y + card_size - max(18 if LOW_RES else 48, int(66 * scale))
+        progress_y = card_y + card_size - max(18, int(66 * scale))
         self.countdown_progress_photo = self._make_countdown_progress_image(progress_width, progress_height, progress)
         self.countdown_progress_item = canvas.create_image(progress_x, progress_y, image=self.countdown_progress_photo, anchor="nw", tags=("countdown", "countdown_card"))
         self.last_countdown_progress_update_at = time.monotonic()
@@ -2862,7 +2899,7 @@ class MapleTimerApp:
         card_x, card_y, card_size = getattr(self, "countdown_card_metrics", ((APP_WIDTH - 26 - 500) / 2, 124, 500))
         scale = self._monitor_scale()
         bar_width = card_size
-        bar_height = max(4 if LOW_RES else 9, int(17 * scale))
+        bar_height = max(4, int(17 * scale))
         bar_x = card_x
         bar_y = card_y + card_size + int(32 * scale)
         active = getattr(self, "rune_active_visual", False)
@@ -2870,8 +2907,8 @@ class MapleTimerApp:
         canvas.create_image(bar_x, bar_y, image=self.rune_status_bar_photo, anchor="nw", tags="rune_status")
 
     def _draw_scan_icon(self, canvas, cx, cy, color):
-        size = 9 if LOW_RES else 18
-        arm = 5 if LOW_RES else 10
+        size = max(7, round(30 * self._monitor_scale())) if LOW_RES else 18
+        arm = max(4, round(size * 0.55)) if LOW_RES else 10
         opts = {"fill": color, "width": 3, "capstyle": tk.ROUND}
         for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
             x = cx + sx * size
@@ -2880,7 +2917,7 @@ class MapleTimerApp:
             canvas.create_line(x, y, x, y - sy * arm, **opts)
 
     def _draw_gear_icon(self, canvas, cx, cy, color):
-        icon = self._make_tinted_settings_icon(22 if LOW_RES else 42, color)
+        icon = self._make_tinted_settings_icon(max(16, round(70 * self._monitor_scale())) if LOW_RES else 42, color)
         if icon is not None:
             self.bottom_settings_icon_photo = icon
             canvas.create_image(cx, cy, image=self.bottom_settings_icon_photo)
@@ -2992,11 +3029,11 @@ class MapleTimerApp:
         canvas.delete("all")
         width = max(1, int(canvas.winfo_width() or float(canvas.cget("width")) or 620))
         height = max(1, int(canvas.winfo_height() or float(canvas.cget("height")) or 160))
-        scale = max(0.55, min(1.28, width / 620))
+        scale = max(MIN_UI_SCALE, min(1.28, width / 620))
         dock_x1, dock_y1, dock_x2, dock_y2 = 0, 4, width, height - 4
-        self._canvas_rounded_rect(canvas, dock_x1 + 2, dock_y1 + 2, dock_x2 - 2, dock_y2 - 2, max(34, int(48 * scale)), fill=(c["panel"]), outline=c["line"], width=2)
+        self._canvas_rounded_rect(canvas, dock_x1 + 2, dock_y1 + 2, dock_x2 - 2, dock_y2 - 2, max(14, int(48 * scale)), fill=(c["panel"]), outline=c["line"], width=2)
 
-        button_size = max(30 if LOW_RES else 58, int(106 * scale))
+        button_size = max(30, int(106 * scale))
         button_y = height / 2
         centers = {
             "scan": (width * 0.22, button_y),
@@ -3015,11 +3052,11 @@ class MapleTimerApp:
             if name == "scan":
                 outline = c["blue"] if self._scan_capture_is_active() else c["red"]
                 line_width = max(2, int(3 * scale))
-            self._canvas_rounded_rect(canvas, x1, y1, x2, y2, max(22, int(30 * scale)), fill="#101213", outline=outline, width=line_width)
+            self._canvas_rounded_rect(canvas, x1, y1, x2, y2, max(8, int(30 * scale)), fill="#101213", outline=outline, width=line_width)
 
         self._draw_scan_icon(canvas, *centers["scan"], "#f4f6f7")
         rune_cx, rune_cy = centers["rune"]
-        rune_size = max(5 if LOW_RES else 10, int(18 * scale))
+        rune_size = max(5, int(18 * scale))
         if getattr(self, "rune_active_visual", False):
             blink_on = getattr(self, "rune_blink_on", True)
             canvas.create_polygon(
@@ -3253,8 +3290,8 @@ class MapleTimerApp:
         canvas.create_polygon(points, smooth=True, splinesteps=24, **kwargs)
 
     def _dot(self, parent, color, command):
-        dot = tk.Canvas(parent, width=20, height=20, bg=parent["bg"], highlightthickness=0, bd=0, cursor="hand2")
-        dot.create_oval(1,1,19,19,fill=color,outline=color)
+        dot = tk.Canvas(parent, width=ui_px(20), height=ui_px(20), bg=parent["bg"], highlightthickness=0, bd=0, cursor="hand2")
+        dot.create_oval(1,1,ui_px(20)-1,ui_px(20)-1,fill=color,outline=color)
         dot.bind("<Button-1>", lambda _e: command())
         return dot
 
@@ -3700,7 +3737,7 @@ class MapleTimerApp:
         return ImageTk.PhotoImage(image)
 
     def _draw_widget_restore_button(self, canvas):
-        x2 = WIDGET_WIDTH - 11
+        x2 = 384 - 11
         y1 = 11
         size = 27
         x1 = x2 - size
@@ -3757,7 +3794,7 @@ class MapleTimerApp:
         display_seconds = max(0, int(self._warning_remaining_float() + 0.999))
         number_fill = c["muted"] if getattr(self, "warning_timer_paused", False) else c["text"]
         self.widget_count_region = (right_x - 58, center_y - 38, right_x + 58, value_y + 22)
-        canvas.create_text(right_x, center_y - 2, text="COUNT", fill="#8a9094", font=self._settings_font(9, "bold"), anchor="center")
+        canvas.create_text(right_x, center_y - (10 if LOW_RES else 2), text="COUNT", fill="#8a9094", font=self._settings_font(9, "bold"), anchor="center")
         self.widget_count_text_item = canvas.create_text(right_x, value_y, text=str(display_seconds), fill=number_fill, font=widget_value_font, anchor="center")
 
         progress = 1.0 if getattr(self, "rune_active_visual", False) else self._rune_cooldown_progress()
@@ -3766,6 +3803,14 @@ class MapleTimerApp:
         fill_w = int(bar_w * max(0.0, min(1.0, progress)))
         for x in range(fill_w):
             canvas.create_line(bar_x + x, bar_y, bar_x + x, bar_y + bar_h, fill=blend_hex("#a966ff", "#f2bdff", x / max(1, bar_w - 1)))
+
+        if LOW_RES:
+            factor = WIDGET_WIDTH / 384
+            for item in canvas.find_all():
+                if canvas.type(item) != "image":
+                    canvas.scale(item, 0, 0, factor, factor)
+            for name in ("widget_restore_region", "widget_count_region", "widget_rune_region"):
+                setattr(self, name, tuple(v * factor for v in getattr(self, name)))
 
     def _update_widget_timer_display_lightweight(self, now=None):
         if not getattr(self, "widget_mode_active", False):

@@ -8,13 +8,10 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('.\\assets\\ui', 'assets\\ui'),
+        ('assets/ui', 'assets/ui'),
         ('.\\maple_timer_custom_icon.ico', '.'),
         ('.\\THIRD_PARTY_LICENSES.txt', '.'),
         ('.\\LICENSE', '.'),
-        ('.\\settings_icon.png', '.'),
-        ('.\\nilbox_splash_icon.png', '.'),
-        ('.\\nilbox_splash_icon_blur.png', '.'),
         ('.\\assets\\sounds', 'assets\\sounds'),
         ('.\\assets\\fonts\\package\\src', 'assets\\fonts\\package\\src'),
         ('.\\assets\\fonts\\timer\\Poppins-Thin.ttf', 'assets\\fonts\\timer'),
@@ -49,5 +46,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['maple_timer_custom_icon.ico'],
+    icon=['assets/ui/high/maple_timer_custom_icon.ico'],
 )
