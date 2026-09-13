@@ -1093,7 +1093,7 @@ class MapleTimerApp:
                     loaded = True
             if not loaded:
                 return False
-            ctypes.windll.user32.SendMessageW(0xFFFF, 0x001D, 0, 0)
+            ctypes.windll.user32.PostMessageW(0xFFFF, 0x001D, 0, 0)
             return True
         except Exception:
             return False
@@ -1115,7 +1115,7 @@ class MapleTimerApp:
             path = resource_path(*TIMER_NUMBER_FONT_FILE)
             if path.exists():
                 ctypes.windll.gdi32.AddFontResourceExW(str(path), 0x10, 0)
-                ctypes.windll.user32.SendMessageW(0xFFFF, 0x001D, 0, 0)
+                ctypes.windll.user32.PostMessageW(0xFFFF, 0x001D, 0, 0)
                 return TIMER_NUMBER_FONT_FAMILY
         except Exception:
             pass
@@ -1140,12 +1140,16 @@ class MapleTimerApp:
         return max(0.0, min(1.0, 1.0 - (remaining / total)))
 
     def _center_geometry(self, width, height):
-        left, top, right, bottom = self._virtual_screen_bounds()
-        screen_w = max(1, right - left)
-        screen_h = max(1, bottom - top)
-        x = left + int((screen_w - width) / 2)
-        y = top + int((screen_h - height) / 2)
+        x, y = self._primary_monitor_center(width, height)
         return f"{width}x{height}+{x}+{y}"
+
+    def _primary_monitor_center(self, width, height):
+        try:
+            sw = max(1, int(self.root.winfo_screenwidth()))
+            sh = max(1, int(self.root.winfo_screenheight()))
+            return (max(0, (sw - width) // 2), max(0, (sh - height) // 2))
+        except Exception:
+            return (80, 80)
 
     def _center_app_position(self, width=None, height=None, margin=24):
         width = max(1, int(width or self.app_size[0] or APP_WIDTH))
@@ -1856,7 +1860,6 @@ class MapleTimerApp:
         try:
             if readonly or getattr(self, "main_app_started", False):
                 dialog.transient(self.root)
-            dialog.grab_set()
         except tk.TclError:
             pass
 
@@ -2098,6 +2101,10 @@ class MapleTimerApp:
             self._force_windows_topmost(dialog, x, y, width, height, force_focus=True)
             dialog.lift()
             dialog.focus_force()
+            try:
+                dialog.grab_set()
+            except tk.TclError:
+                pass
         except tk.TclError:
             pass
 
@@ -2106,7 +2113,8 @@ class MapleTimerApp:
             return
         if self._disclaimer_acceptance_required():
             try:
-                self.root.withdraw()
+                self.root.geometry("1x1+-10000+-10000")
+                self.root.deiconify()
                 self.root.attributes("-alpha", 0.0)
                 self.root.update_idletasks()
                 self._show_disclaimer_dialog(
